@@ -54,9 +54,13 @@ export default function PhotoUploader({ userId, onEventCreated, onClose }) {
 
       if (storageError) throw storageError;
 
-      const { data: { publicUrl } } = supabase.storage
+      // Private bucket → use a signed URL (valid 1 year = 31536000s)
+      const { data: signedData, error: signedError } = await supabase.storage
         .from('jarvis-uploads')
-        .getPublicUrl(fileName);
+        .createSignedUrl(fileName, 31536000);
+
+      if (signedError) throw signedError;
+      const publicUrl = signedData.signedUrl;
 
       setProgress(50);
       setPhase('scanning');
@@ -66,7 +70,7 @@ export default function PhotoUploader({ userId, onEventCreated, onClose }) {
       const result = await extractEventFromImage(base64, file.type);
 
       setProgress(80);
-      setExtracted({ ...result, _imageUrl: publicUrl });
+      setExtracted({ ...result, _imageUrl: publicUrl, _storagePath: fileName });
       setEditData({
         title: result.title || '',
         event_type: result.event_type || 'general',
@@ -76,6 +80,7 @@ export default function PhotoUploader({ userId, onEventCreated, onClose }) {
         address: result.address || '',
         notes: result.notes || '',
         _imageUrl: publicUrl,
+        _storagePath: fileName,
       });
       setPhase('confirming');
       setProgress(100);
